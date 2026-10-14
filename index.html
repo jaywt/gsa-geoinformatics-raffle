@@ -63,9 +63,19 @@
   .tools { display:flex; gap:8px; flex-wrap:wrap; }
   .note { font-size:12px; color:var(--mute); margin-top:8px; }
   .hide-contact .contact { filter:blur(5px); }
+  #bk { position:sticky; top:0; z-index:10; display:flex; align-items:center; gap:12px; flex-wrap:wrap; padding:10px 24px; font-size:14px; border-bottom:1px solid var(--line); }
+  #bk.ok { background:#14532d; color:#dcfce7; }
+  #bk.warn { background:#713f12; color:#fef3c7; }
+  #bk.err { background:#7f1d1d; color:#fee2e2; }
+  #bk .grow { flex:1; min-width:240px; }
+  #bk #bkActions { display:flex; gap:8px; flex-wrap:wrap; }
+  #bk button { padding:5px 12px; font-size:13px; }
+  .check { display:flex; align-items:center; gap:8px; font-size:13px; color:var(--mute); margin-top:10px; }
+  .check input { width:auto; }
 </style>
 </head>
 <body>
+<div id="bk" class="warn"><span class="grow" id="bkText">Checking backup status…</span><span id="bkActions"></span></div>
 <header>
   <div class="brand">
     <a class="logo" href="https://community.geosociety.org/geoinformaticsdivision/home" target="_blank" rel="noopener">
@@ -150,6 +160,8 @@
   <section class="card full">
     <h2>Admin</h2>
     <div class="tools">
+      <button class="ghost" id="chooseBtn">Backup folder…</button>
+      <button class="ghost" id="restoreBtn">Restore from backup folder</button>
       <button class="ghost" id="privacyBtn">Hide contacts</button>
       <button class="ghost" id="csvBtn">Export sales CSV</button>
       <button class="ghost" id="exportBtn">Backup (JSON)</button>
@@ -157,7 +169,10 @@
       <input type="file" id="importFile" accept="application/json" hidden>
       <button class="danger" id="resetBtn">Reset everything</button>
     </div>
-    <div class="note">Data is saved in this browser only (localStorage). Use Backup regularly, and use the same browser/computer for the whole raffle.</div>
+    <label class="check"><input type="checkbox" id="fbChk"> If folder backup isn't working, download a backup file after every change instead</label>
+    <div class="note">Data is saved in this browser (localStorage) and, after every change, copied to your backup folder
+      (<code>raffle-latest.json</code>, <code>raffle-YYYY-MM-DD.json</code> daily snapshot, <code>raffle-sales-latest.csv</code>).
+      Pick a folder inside Dropbox. Use the same browser for the whole raffle. <span id="persistNote"></span></div>
   </section>
 </main>
 <footer>Raffle for the <a href="https://community.geosociety.org/geoinformaticsdivision/home" target="_blank" rel="noopener">GSA Geoinformatics &amp; Data Science Division</a> · $1 per ticket · more tickets, better odds</footer>
@@ -174,7 +189,8 @@
   const defaultState = () => ({
     prizes: [{name:'Prize 1', winner:null}, {name:'Prize 2', winner:null}, {name:'Prize 3', winner:null}],
     purchases: [],
-    nextId: 1
+    nextId: 1,
+    rev: 0                       // increases on every save; used to detect stale/lost local data
   });
   let state = load();
 
@@ -182,7 +198,21 @@
     try { const s = JSON.parse(localStorage.getItem(KEY)); if (s && s.prizes && s.purchases) return s; } catch (e) {}
     return defaultState();
   }
-  function save() { localStorage.setItem(KEY, JSON.stringify(state)); }
+  function save() {
+    state.rev = (state.rev || 0) + 1;
+    try { localStorage.setItem(KEY, JSON.stringify(state)); }
+    catch (e) { alert('Could not save to browser storage: ' + e.message + '\nUse "Backup (JSON)" NOW.'); }
+    Backup.schedule();
+  }
+  // Replace the whole state (import / restore). Keeps rev strictly increasing.
+  function applyState(s) {
+    const oldRev = state.rev || 0;
+    delete s._meta;
+    state = s;
+    if (!state.nextId) state.nextId = Math.max(0, ...state.purchases.map(p => p.id)) + 1;
+    state.rev = Math.max(oldRev, s.rev || 0);
+    save(); render();
+  }
 
   // ---------- Helpers ----------
   const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -303,6 +333,7 @@
       lb.append(tr);
     });
     if (!state.purchases.length) { const tr = document.createElement('tr'); const c = td('No sales yet.'); c.colSpan = 7; tr.append(c); lb.append(tr); }
+    Backup.bar();
   }
 
   function updateTotal() {
@@ -387,13 +418,14 @@
   const stamp = () => new Date().toISOString().slice(0, 10);
 
   $('exportBtn').addEventListener('click', () => download(`raffle-backup-${stamp()}.json`, JSON.stringify(state, null, 2), 'application/json'));
-  $('csvBtn').addEventListener('click', () => {
+  function buildCsv() {
     const esc = v => { v = String(v); if (/^[=+\-@]/.test(v)) v = "'" + v; return '"' + v.replace(/"/g, '""') + '"'; };
     const rows = [['time','name','contact','tickets','paid','status']];
     state.purchases.forEach(p => rows.push([new Date(p.ts).toISOString(), p.name, p.contact, p.qty, p.qty * PRICE,
       p.clearedByPrize === null ? 'in pool' : 'won ' + state.prizes[p.clearedByPrize].name]));
-    download(`raffle-sales-${stamp()}.csv`, rows.map(r => r.map(esc).join(',')).join('\n'), 'text/csv');
-  });
+    return rows.map(r => r.map(esc).join(',')).join('\n');
+  }
+  $('csvBtn').addEventListener('click', () => download(`raffle-sales-${stamp()}.csv`, buildCsv(), 'text/csv'));
   $('importBtn').addEventListener('click', () => $('importFile').click());
   $('importFile').addEventListener('change', async e => {
     const f = e.target.files[0]; e.target.value = ''; if (!f) return;
@@ -401,19 +433,199 @@
       const s = JSON.parse(await f.text());
       if (!Array.isArray(s.prizes) || !Array.isArray(s.purchases)) throw new Error();
       if (!confirm('Replace all current data with this backup?')) return;
-      state = s; if (!state.nextId) state.nextId = Math.max(0, ...state.purchases.map(p => p.id)) + 1;
-      save(); render();
+      applyState(s);
     } catch { alert('Invalid backup file.'); }
   });
   $('resetBtn').addEventListener('click', () => {
     if (!confirm('Delete ALL sales and winners? This cannot be undone.')) return;
     if (prompt('Type RESET to confirm') !== 'RESET') return;
-    state = defaultState(); save(); $('stage').classList.remove('winner');
+    const r = state.rev || 0; state = defaultState(); state.rev = r; save(); $('stage').classList.remove('winner');
     $('stage').querySelector('.name').textContent = '—'; $('stage').querySelector('.sub').textContent = 'Ready to draw';
     render();
   });
 
+  // ---------- Backup to folder (File System Access API) with download fallback ----------
+  const Backup = (() => {
+    const LATEST = 'raffle-latest.json', CSV = 'raffle-sales-latest.csv', FB = 'raffle-fallback-dl';
+    const RW = {mode: 'readwrite'};
+    const supported = typeof window.showDirectoryPicker === 'function';
+    let handle = null, perm = 'none';
+    let lastOkRev = -1, lastOkAt = null, lastDlAt = null, lastError = null, conflict = null;
+    let running = false, again = false, force = false, fromSave = false;
+    const fallbackOn = () => localStorage.getItem(FB) !== '0';
+    const clock = ts => new Date(ts).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+
+    // tiny IndexedDB key-value store so the folder handle survives reloads
+    const idb = () => new Promise((res, rej) => {
+      const r = indexedDB.open('raffle-backup', 1);
+      r.onupgradeneeded = () => r.result.createObjectStore('kv');
+      r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+    });
+    const idbGet = async k => { const db = await idb(); return new Promise((res, rej) => { const q = db.transaction('kv').objectStore('kv').get(k); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); }); };
+    const idbSet = async (k, v) => { const db = await idb(); return new Promise((res, rej) => { const t = db.transaction('kv', 'readwrite'); t.objectStore('kv').put(v, k); t.oncomplete = res; t.onerror = () => rej(t.error); }); };
+
+    async function readJson(dir, name) {
+      try { const fh = await dir.getFileHandle(name); return JSON.parse(await (await fh.getFile()).text()); }
+      catch (e) { if (e.name === 'NotFoundError' || e.name === 'SyntaxError') return null; throw e; }
+    }
+    async function writeFile(dir, name, text) {
+      const fh = await dir.getFileHandle(name, {create: true});
+      const w = await fh.createWritable();          // written to a temp file, swapped in on close
+      await w.write(text); await w.close();
+    }
+    const dayStamp = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
+
+    async function writeOnce() {
+      const snapRev = state.rev || 0;
+      const triggered = fromSave; fromSave = false;
+      const json = JSON.stringify({...state, _meta: {savedAt: new Date().toISOString(), app: 'raffle-v1'}}, null, 2);
+      let saved = false;
+      if (handle) {
+        try {
+          if (perm !== 'granted') {
+            perm = await handle.queryPermission(RW);
+            if (perm === 'prompt') { try { perm = await handle.requestPermission(RW); } catch { /* needs a click */ } }
+          }
+          if (perm === 'granted') {
+            if (force) conflict = null;
+            else {
+              // Safety: never overwrite a backup that is NEWER than this browser's data
+              // (e.g. browser storage was cleared and the app restarted empty).
+              const ex = await readJson(handle, LATEST);
+              conflict = (ex && Array.isArray(ex.purchases) && (ex.rev || 0) > snapRev)
+                ? {sales: ex.purchases.length, savedAt: ex._meta && ex._meta.savedAt} : null;
+            }
+            if (!conflict) {
+              force = false;
+              await writeFile(handle, LATEST, json);
+              await writeFile(handle, `raffle-${dayStamp()}.json`, json);
+              await writeFile(handle, CSV, buildCsv());
+              lastOkRev = snapRev; lastOkAt = Date.now(); lastError = null; saved = true;
+            }
+          }
+        } catch (e) {
+          if (e && e.name === 'NotAllowedError') { perm = 'prompt'; lastError = null; }   // access revoked -> ask to re-approve
+          else lastError = (e && e.message) || String(e);
+        }
+      }
+      if (!saved && triggered && fallbackOn()) {
+        download(`raffle-backup-${new Date().toISOString().replace(/[:.]/g, '-')}.json`, json, 'application/json');
+        lastDlAt = Date.now();
+      }
+    }
+
+    async function run(forceOverwrite) {
+      if (forceOverwrite) force = true;
+      if (running) { again = true; return; }
+      running = true; bar();
+      try { do { again = false; await writeOnce(); } while (again); }
+      finally { running = false; bar(); }
+    }
+
+    async function pick() {
+      try {
+        const h = await window.showDirectoryPicker({id: 'raffle-backup', mode: 'readwrite'});
+        handle = h; perm = 'granted'; conflict = null; lastError = null; lastOkRev = -1; lastOkAt = null;
+        idbSet('dir', h).catch(() => {});   // remember folder across reloads; never block on it
+        return true;
+      } catch (e) {
+        if (e.name !== 'AbortError') lastError = 'Could not use that folder: ' + (e.message || e.name) + ' — try a sub-folder such as Dropbox/raffle-backup.';
+        return false;
+      } finally { bar(); }
+    }
+    async function choose() { if (await pick()) run(); }
+    async function reapprove() {
+      try { perm = await handle.requestPermission(RW); } catch (e) { lastError = e.message; }
+      run();
+    }
+    async function restore() {
+      if (!supported) { alert('Restoring from a folder needs Chrome or Edge. Use "Restore backup" with a JSON file instead.'); return; }
+      if (!handle && !(await pick())) return;
+      try {
+        if (perm !== 'granted') perm = await handle.requestPermission(RW);
+        if (perm !== 'granted') { bar(); return; }
+        const ex = await readJson(handle, LATEST);
+        if (!ex || !Array.isArray(ex.prizes) || !Array.isArray(ex.purchases)) { alert(`No valid ${LATEST} found in folder “${handle.name}”.`); bar(); return; }
+        const when = ex._meta && ex._meta.savedAt ? new Date(ex._meta.savedAt).toLocaleString() : 'unknown time';
+        if (!confirm(`Replace this browser's data (${state.purchases.length} sales) with the backup from ${when} (${ex.purchases.length} sales)?`)) return;
+        conflict = null; lastError = null;
+        applyState(ex);
+      } catch (e) { lastError = e.message || String(e); bar(); }
+    }
+
+    function bar() {
+      const el = $('bk'), txt = $('bkText'), act = $('bkActions');
+      act.replaceChildren();
+      const btn = (label, fn) => { const b = document.createElement('button'); b.textContent = label; b.addEventListener('click', fn); act.append(b); };
+      const dirty = (state.rev || 0) > lastOkRev;
+      const name = handle ? handle.name : '';
+      const dl = lastDlAt ? ` Last fallback download: ${clock(lastDlAt)}.` : '';
+      let kind, text;
+      if (conflict) {
+        kind = 'err';
+        text = `⚠️ The backup folder “${name}” has NEWER data (${conflict.sales} sales${conflict.savedAt ? ', saved ' + new Date(conflict.savedAt).toLocaleString() : ''}) than this browser. Nothing was overwritten.`;
+        btn('Restore from folder', restore);
+        btn('Overwrite folder with this browser’s data', () => { if (confirm('Overwrite the backup in the folder with what is in this browser?')) run(true); });
+      } else if (!supported) {
+        kind = fallbackOn() ? 'warn' : 'err';
+        text = (fallbackOn()
+          ? '⚠️ This browser can’t auto-save to a folder (use Chrome or Edge). A backup file is downloaded after every change — set your Downloads folder to a Dropbox folder.'
+          : '⚠️ No automatic backup! This browser can’t save to a folder and fallback downloads are off.') + dl;
+      } else if (!handle) {
+        kind = 'err';
+        text = '⚠️ No backup folder chosen — buyer data exists only in this browser.' + (fallbackOn() ? ' A backup file is downloaded after every change.' + dl : '');
+        btn('Choose backup folder', choose);
+        btn('Restore from folder', restore);
+      } else if (perm !== 'granted') {
+        kind = 'err';
+        text = `⚠️ Backup folder “${name}” needs your permission again after the page reload. Not backed up yet.`;
+        btn('Re-approve folder access', reapprove);
+      } else if (lastError) {
+        kind = 'err';
+        text = `⚠️ Backup failed: ${lastError}` + (fallbackOn() ? dl : '');
+        btn('Retry', () => run()); btn('Change folder', choose);
+      } else if (dirty) {
+        kind = running ? 'warn' : 'err';
+        text = running ? '⏳ Saving backup…' : '⚠️ Latest changes are not backed up yet.';
+        if (!running) btn('Back up now', () => run());
+      } else {
+        kind = 'ok';
+        text = `✅ Backed up to folder “${name}” at ${clock(lastOkAt)} · ${state.purchases.length} sale(s) saved`;
+      }
+      el.className = kind; txt.textContent = text;
+    }
+
+    async function init() {
+      // wire up buttons first so early clicks are never ignored
+      $('fbChk').checked = fallbackOn();
+      $('fbChk').addEventListener('change', e => { localStorage.setItem(FB, e.target.checked ? '1' : '0'); bar(); });
+      $('chooseBtn').addEventListener('click', choose);
+      $('restoreBtn').addEventListener('click', restore);
+      bar();
+      if (supported) {
+        try {
+          const saved = await idbGet('dir');
+          if (saved && !handle) {        // don't clobber a folder the user already picked meanwhile
+            handle = saved;
+            perm = await handle.queryPermission(RW);
+            if (perm === 'granted') run();
+          }
+        } catch (e) { lastError = e.message; }
+      }
+      bar();
+      if (navigator.storage && navigator.storage.persist) {
+        try {
+          const ok = await navigator.storage.persist();
+          $('persistNote').textContent = ok ? 'Browser storage is marked persistent.' : 'Browser storage is not marked persistent, so the browser could clear it when disk space is low — keep the backup folder set.';
+        } catch {}
+      }
+    }
+
+    return {init, bar, schedule() { fromSave = true; run(); }, choose, restore};
+  })();
+
   render();
+  Backup.init();
 })();
 </script>
 </body>
