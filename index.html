@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GSA Geoinformatics & Data Science Division — Raffle</title>
+<style>
+  :root { --bg:#0f172a; --card:#1e293b; --line:#334155; --txt:#e2e8f0; --mute:#94a3b8; --acc:#f59e0b; --ok:#22c55e; --bad:#ef4444; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; background:var(--bg); color:var(--txt); }
+  header { padding:16px 24px; border-bottom:1px solid var(--line); display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; }
+  h1 { margin:0; font-size:22px; }
+  .brand { display:flex; align-items:center; gap:16px; }
+  .brand .logo { background:#fff; border-radius:10px; padding:6px 10px; display:flex; }
+  .brand .logo img { height:44px; width:auto; display:block; }
+  .brand .sub { color:var(--mute); font-size:13px; margin-top:2px; }
+  footer { text-align:center; color:var(--mute); font-size:12px; padding:0 24px 28px; }
+  footer a { color:var(--acc); }
+  h2 { margin:0 0 12px; font-size:16px; color:var(--acc); text-transform:uppercase; letter-spacing:.05em; }
+  main { max-width:1200px; margin:0 auto; padding:24px; display:grid; gap:20px; grid-template-columns:1fr 1fr; }
+  @media (max-width:860px){ main{ grid-template-columns:1fr; } }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:18px; }
+  .full { grid-column:1/-1; }
+  .stats { display:flex; gap:12px; flex-wrap:wrap; }
+  .stat { background:var(--bg); border:1px solid var(--line); border-radius:10px; padding:10px 16px; min-width:120px; }
+  .stat b { display:block; font-size:24px; color:var(--acc); }
+  .stat span { font-size:12px; color:var(--mute); }
+  label { display:block; font-size:13px; color:var(--mute); margin:10px 0 4px; }
+  input, button, select { font:inherit; }
+  input[type=text], input[type=number] { width:100%; padding:9px 11px; border-radius:8px; border:1px solid var(--line); background:var(--bg); color:var(--txt); }
+  input:focus { outline:2px solid var(--acc); }
+  button { padding:9px 16px; border:0; border-radius:8px; background:var(--acc); color:#111; font-weight:600; cursor:pointer; }
+  button:hover { filter:brightness(1.1); }
+  button:disabled { opacity:.4; cursor:not-allowed; }
+  button.ghost { background:transparent; color:var(--txt); border:1px solid var(--line); }
+  button.danger { background:var(--bad); color:#fff; }
+  button.small { padding:4px 10px; font-size:12px; }
+  table { width:100%; border-collapse:collapse; font-size:14px; }
+  th, td { text-align:left; padding:7px 8px; border-bottom:1px solid var(--line); }
+  th { color:var(--mute); font-weight:500; font-size:12px; text-transform:uppercase; }
+  td.num, th.num { text-align:right; }
+  .scroll { max-height:320px; overflow:auto; }
+  .msg { margin-top:10px; font-size:13px; min-height:18px; }
+  .msg.err { color:var(--bad); } .msg.ok { color:var(--ok); }
+  .prize { display:flex; align-items:center; gap:10px; padding:10px; border:1px solid var(--line); border-radius:10px; margin-bottom:8px; background:var(--bg); }
+  .prize.next { border-color:var(--acc); }
+  .prize .idx { width:28px; height:28px; border-radius:50%; background:var(--line); display:grid; place-items:center; font-weight:700; flex:none; }
+  .prize.next .idx { background:var(--acc); color:#111; }
+  .prize.done .idx { background:var(--ok); color:#111; }
+  .prize input { flex:1; }
+  .prize .win { color:var(--ok); font-size:13px; }
+  #stage { text-align:center; padding:28px 12px; border:2px dashed var(--line); border-radius:12px; margin:12px 0; min-height:120px; }
+  #stage .name { font-size:clamp(28px,6vw,52px); font-weight:800; }
+  #stage .sub { color:var(--mute); margin-top:6px; }
+  #stage.winner { border-color:var(--acc); border-style:solid; background:rgba(245,158,11,.08); }
+  #stage.winner .name { color:var(--acc); }
+  .row { display:flex; gap:10px; }
+  .row > * { flex:1; }
+  .bar { height:6px; background:var(--bg); border-radius:3px; overflow:hidden; min-width:60px; }
+  .bar i { display:block; height:100%; background:var(--acc); }
+  .tag { font-size:11px; padding:2px 7px; border-radius:99px; background:var(--line); color:var(--mute); }
+  .tag.won { background:rgba(34,197,94,.2); color:var(--ok); }
+  .tools { display:flex; gap:8px; flex-wrap:wrap; }
+  .note { font-size:12px; color:var(--mute); margin-top:8px; }
+  .hide-contact .contact { filter:blur(5px); }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <a class="logo" href="https://community.geosociety.org/geoinformaticsdivision/home" target="_blank" rel="noopener">
+      <img src="logo.png" alt="GSA Geoinformatics and Data Science Division">
+    </a>
+    <div>
+      <h1>🎟️ Raffle Lucky Draw</h1>
+      <div class="sub">GSA Geoinformatics &amp; Data Science Division</div>
+    </div>
+  </div>
+  <div class="stats">
+    <div class="stat"><b id="sRevenue">$0</b><span>Total revenue</span></div>
+    <div class="stat"><b id="sPool">0</b><span>Tickets in pool</span></div>
+    <div class="stat"><b id="sPeople">0</b><span>Participants in pool</span></div>
+    <div class="stat"><b id="sDraws">0 / 3</b><span>Draws done</span></div>
+  </div>
+</header>
+
+<main>
+  <!-- SELL -->
+  <section class="card">
+    <h2>Sell Tickets ($<span id="priceLabel">1</span> each)</h2>
+    <form id="sellForm" autocomplete="off">
+      <label for="fName">Name</label>
+      <input type="text" id="fName" required maxlength="80">
+      <label for="fContact">Contact (phone or email)</label>
+      <input type="text" id="fContact" required maxlength="120" placeholder="name@example.com or 555-123-4567">
+      <label for="fQty">Number of tickets</label>
+      <input type="number" id="fQty" min="1" max="100000" step="1" value="1" required>
+      <div class="row" style="margin-top:14px">
+        <button type="submit">Sell tickets — <span id="total">$1</span></button>
+      </div>
+      <div class="msg" id="sellMsg"></div>
+    </form>
+    <div class="note">Same contact = same person; tickets add up. Winners are removed from the pool and can buy again to re-enter later draws.</div>
+  </section>
+
+  <!-- DRAW -->
+  <section class="card">
+    <h2>Lucky Draw</h2>
+    <div id="prizes"></div>
+    <div id="stage"><div class="name">—</div><div class="sub">Ready to draw</div></div>
+    <button id="drawBtn" style="width:100%;font-size:18px;padding:14px">🎰 Draw next winner</button>
+    <div class="msg" id="drawMsg"></div>
+    <div class="note">One draw per day is suggested. You will be warned if a draw was already made today.</div>
+  </section>
+
+  <!-- POOL -->
+  <section class="card">
+    <h2>Current Pool</h2>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Name</th><th class="contact">Contact</th><th class="num">Tickets</th><th>Chance</th></tr></thead>
+        <tbody id="poolBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- WINNERS -->
+  <section class="card">
+    <h2>Winners</h2>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Prize</th><th>Winner</th><th class="contact">Contact</th><th>Drawn</th></tr></thead>
+        <tbody id="winBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- SALES LOG -->
+  <section class="card full">
+    <h2>Sales Log</h2>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Time</th><th>Name</th><th class="contact">Contact</th><th class="num">Tickets</th><th class="num">Paid</th><th>Status</th><th></th></tr></thead>
+        <tbody id="logBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ADMIN -->
+  <section class="card full">
+    <h2>Admin</h2>
+    <div class="tools">
+      <button class="ghost" id="privacyBtn">Hide contacts</button>
+      <button class="ghost" id="csvBtn">Export sales CSV</button>
+      <button class="ghost" id="exportBtn">Backup (JSON)</button>
+      <button class="ghost" id="importBtn">Restore backup</button>
+      <input type="file" id="importFile" accept="application/json" hidden>
+      <button class="danger" id="resetBtn">Reset everything</button>
+    </div>
+    <div class="note">Data is saved in this browser only (localStorage). Use Backup regularly, and use the same browser/computer for the whole raffle.</div>
+  </section>
+</main>
+<footer>Raffle for the <a href="https://community.geosociety.org/geoinformaticsdivision/home" target="_blank" rel="noopener">GSA Geoinformatics &amp; Data Science Division</a> · $1 per ticket · more tickets, better odds</footer>
+
+<script>
+(() => {
+  const KEY = 'raffle-v1';
+  const PRICE = 1;
+  const $ = id => document.getElementById(id);
+
+  // ---------- State ----------
+  // purchases: {id, name, contact, key, qty, ts, clearedByPrize: null | prizeIndex}
+  // prizes: {name, winner: null | {name, contact, key, tickets, ts, poolSize, purchaseIds}}
+  const defaultState = () => ({
+    prizes: [{name:'Prize 1', winner:null}, {name:'Prize 2', winner:null}, {name:'Prize 3', winner:null}],
+    purchases: [],
+    nextId: 1
+  });
+  let state = load();
+
+  function load() {
+    try { const s = JSON.parse(localStorage.getItem(KEY)); if (s && s.prizes && s.purchases) return s; } catch (e) {}
+    return defaultState();
+  }
+  function save() { localStorage.setItem(KEY, JSON.stringify(state)); }
+
+  // ---------- Helpers ----------
+  const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  function normContact(raw) {
+    const c = raw.trim();
+    if (emailRe.test(c)) return {ok:true, key:'e:' + c.toLowerCase(), display:c};
+    const digits = c.replace(/\D/g, '');
+    if (/^[\d\s().+\-]+$/.test(c) && digits.length >= 7 && digits.length <= 15) {
+      // treat US 11-digit starting with 1 as same as 10-digit
+      const d = (digits.length === 11 && digits[0] === '1') ? digits.slice(1) : digits;
+      return {ok:true, key:'p:' + d, display:c};
+    }
+    return {ok:false};
+  }
+  const fmtTime = ts => new Date(ts).toLocaleString([], {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
+  const sameDay = (a, b) => new Date(a).toDateString() === new Date(b).toDateString();
+
+  function activePool() {
+    const map = new Map();
+    for (const p of state.purchases) {
+      if (p.clearedByPrize !== null) continue;
+      const e = map.get(p.key) || {key:p.key, name:p.name, contact:p.contact, tickets:0, ids:[]};
+      e.tickets += p.qty; e.name = p.name; e.contact = p.contact; e.ids.push(p.id);
+      map.set(p.key, e);
+    }
+    return [...map.values()];
+  }
+
+  // Cryptographically secure uniform integer in [0, n)
+  function randInt(n) {
+    const max = 0x100000000, limit = max - (max % n), buf = new Uint32Array(1);
+    do { crypto.getRandomValues(buf); } while (buf[0] >= limit);
+    return buf[0] % n;
+  }
+
+  function pickWinner(pool) {
+    const total = pool.reduce((s, e) => s + e.tickets, 0);
+    let r = randInt(total);
+    for (const e of pool) { if (r < e.tickets) return e; r -= e.tickets; }
+  }
+
+  // ---------- Render ----------
+  function setText(el, t) { el.textContent = t; return el; }
+  function td(text, cls) { const c = document.createElement('td'); c.textContent = text; if (cls) c.className = cls; return c; }
+
+  function render() {
+    const pool = activePool();
+    const poolTickets = pool.reduce((s, e) => s + e.tickets, 0);
+    const sold = state.purchases.reduce((s, p) => s + p.qty, 0);
+    const drawn = state.prizes.filter(p => p.winner).length;
+    $('sRevenue').textContent = '$' + (sold * PRICE).toLocaleString();
+    $('sPool').textContent = poolTickets.toLocaleString();
+    $('sPeople').textContent = pool.length;
+    $('sDraws').textContent = drawn + ' / ' + state.prizes.length;
+    $('priceLabel').textContent = PRICE;
+    updateTotal();
+
+    // Prizes
+    const pz = $('prizes'); pz.replaceChildren();
+    const nextIdx = state.prizes.findIndex(p => !p.winner);
+    state.prizes.forEach((p, i) => {
+      const d = document.createElement('div');
+      d.className = 'prize' + (i === nextIdx ? ' next' : '') + (p.winner ? ' done' : '');
+      const idx = setText(document.createElement('div'), p.winner ? '✓' : i + 1); idx.className = 'idx';
+      const inp = document.createElement('input'); inp.type = 'text'; inp.value = p.name; inp.maxLength = 80;
+      inp.addEventListener('change', () => { p.name = inp.value.trim() || ('Prize ' + (i + 1)); save(); render(); });
+      d.append(idx, inp);
+      if (p.winner) { const w = setText(document.createElement('span'), '🏆 ' + p.winner.name); w.className = 'win'; d.append(w); }
+      pz.append(d);
+    });
+    $('drawBtn').disabled = nextIdx === -1 || pool.length === 0 || busy;
+    $('drawBtn').textContent = nextIdx === -1 ? 'All prizes drawn' : `🎰 Draw winner for "${state.prizes[nextIdx].name}"`;
+
+    // Pool
+    const pb = $('poolBody'); pb.replaceChildren();
+    pool.sort((a, b) => b.tickets - a.tickets).forEach(e => {
+      const tr = document.createElement('tr');
+      const pct = poolTickets ? e.tickets / poolTickets * 100 : 0;
+      const chance = document.createElement('td');
+      const bar = document.createElement('div'); bar.className = 'bar';
+      const fill = document.createElement('i'); fill.style.width = Math.min(100, pct) + '%'; bar.append(fill);
+      const lbl = document.createElement('div'); lbl.textContent = pct.toFixed(1) + '%'; lbl.style.fontSize = '12px';
+      chance.append(lbl, bar);
+      tr.append(td(e.name), td(e.contact, 'contact'), td(e.tickets, 'num'), chance);
+      pb.append(tr);
+    });
+    if (!pool.length) { const tr = document.createElement('tr'); const c = td('No tickets in the pool yet.'); c.colSpan = 4; tr.append(c); pb.append(tr); }
+
+    // Winners
+    const wb = $('winBody'); wb.replaceChildren();
+    state.prizes.forEach((p, i) => {
+      const tr = document.createElement('tr');
+      if (p.winner) tr.append(td(p.name), td(p.winner.name), td(p.winner.contact, 'contact'), td(fmtTime(p.winner.ts)));
+      else tr.append(td(p.name), td('— not drawn —'), td('', 'contact'), td(''));
+      wb.append(tr);
+    });
+
+    // Log
+    const lb = $('logBody'); lb.replaceChildren();
+    [...state.purchases].reverse().forEach(p => {
+      const tr = document.createElement('tr');
+      const st = document.createElement('td');
+      const tag = document.createElement('span');
+      if (p.clearedByPrize === null) { tag.className = 'tag'; tag.textContent = 'in pool'; }
+      else { tag.className = 'tag won'; tag.textContent = 'cleared – won ' + state.prizes[p.clearedByPrize].name; }
+      st.append(tag);
+      const act = document.createElement('td');
+      if (p.clearedByPrize === null) {
+        const b = document.createElement('button'); b.className = 'ghost small'; b.textContent = 'Void';
+        b.title = 'Remove this sale (refund)';
+        b.addEventListener('click', () => {
+          if (!confirm(`Void ${p.qty} ticket(s) for ${p.name}? This removes the sale.`)) return;
+          state.purchases = state.purchases.filter(x => x.id !== p.id); save(); render();
+        });
+        act.append(b);
+      }
+      tr.append(td(fmtTime(p.ts)), td(p.name), td(p.contact, 'contact'), td(p.qty, 'num'), td('$' + p.qty * PRICE, 'num'), st, act);
+      lb.append(tr);
+    });
+    if (!state.purchases.length) { const tr = document.createElement('tr'); const c = td('No sales yet.'); c.colSpan = 7; tr.append(c); lb.append(tr); }
+  }
+
+  function updateTotal() {
+    const q = parseInt($('fQty').value, 10);
+    $('total').textContent = '$' + ((q > 0 ? q : 0) * PRICE);
+  }
+
+  // ---------- Sell ----------
+  $('fQty').addEventListener('input', updateTotal);
+  $('sellForm').addEventListener('submit', ev => {
+    ev.preventDefault();
+    const msg = $('sellMsg'); msg.className = 'msg';
+    const name = $('fName').value.trim();
+    const c = normContact($('fContact').value);
+    const qty = Number($('fQty').value);
+    if (!name) { msg.textContent = 'Please enter a name.'; msg.classList.add('err'); return; }
+    if (!c.ok) { msg.textContent = 'Contact must be a valid email or phone number.'; msg.classList.add('err'); return; }
+    if (!Number.isInteger(qty) || qty < 1) { msg.textContent = 'Tickets must be a whole number ≥ 1.'; msg.classList.add('err'); return; }
+    state.purchases.push({id: state.nextId++, name, contact: c.display, key: c.key, qty, ts: Date.now(), clearedByPrize: null});
+    save();
+    msg.textContent = `Sold ${qty} ticket(s) to ${name} — collect $${qty * PRICE}.`; msg.classList.add('ok');
+    $('sellForm').reset(); $('fQty').value = 1; $('fName').focus();
+    render();
+  });
+
+  // ---------- Draw ----------
+  let busy = false;
+  $('drawBtn').addEventListener('click', async () => {
+    if (busy) return;
+    const idx = state.prizes.findIndex(p => !p.winner);
+    const pool = activePool();
+    const msg = $('drawMsg'); msg.className = 'msg'; msg.textContent = '';
+    if (idx === -1 || !pool.length) return;
+
+    const last = state.prizes.filter(p => p.winner).map(p => p.winner.ts).sort().pop();
+    if (last && sameDay(last, Date.now()) &&
+        !confirm('A draw has already been made today. Draw again anyway?')) return;
+    if (!confirm(`Draw winner for "${state.prizes[idx].name}"?\nPool: ${pool.reduce((s,e)=>s+e.tickets,0)} tickets from ${pool.length} people.`)) return;
+
+    busy = true; render();
+    const winner = pickWinner(pool);           // decided before the animation
+    const stage = $('stage'); stage.classList.remove('winner');
+    const nameEl = stage.querySelector('.name'), subEl = stage.querySelector('.sub');
+    subEl.textContent = 'Drawing…';
+    const total = pool.reduce((s, e) => s + e.tickets, 0);
+    const t0 = performance.now(), dur = 3500;
+    await new Promise(res => {
+      (function tick() {
+        const el = performance.now() - t0;
+        if (el >= dur) return res();
+        let r = randInt(total), shown = pool[0];
+        for (const e of pool) { if (r < e.tickets) { shown = e; break; } r -= e.tickets; }
+        nameEl.textContent = shown.name;
+        setTimeout(tick, 50 + 250 * (el / dur) ** 2);
+      })();
+    });
+
+    nameEl.textContent = winner.name;
+    subEl.textContent = `Winner of "${state.prizes[idx].name}" — ${winner.tickets} ticket(s) of ${total}`;
+    stage.classList.add('winner');
+
+    // record + clear winner from pool
+    state.prizes[idx].winner = {name: winner.name, contact: winner.contact, key: winner.key,
+      tickets: winner.tickets, ts: Date.now(), poolSize: total, purchaseIds: winner.ids};
+    state.purchases.forEach(p => { if (p.key === winner.key && p.clearedByPrize === null) p.clearedByPrize = idx; });
+    save();
+    busy = false; render();
+    msg.textContent = `${winner.name} removed from the pool. They can buy new tickets to re-enter.`; msg.classList.add('ok');
+  });
+
+  // ---------- Admin ----------
+  $('privacyBtn').addEventListener('click', () => {
+    const on = document.body.classList.toggle('hide-contact');
+    $('privacyBtn').textContent = on ? 'Show contacts' : 'Hide contacts';
+  });
+
+  function download(name, text, type) {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([text], {type}));
+    a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+  const stamp = () => new Date().toISOString().slice(0, 10);
+
+  $('exportBtn').addEventListener('click', () => download(`raffle-backup-${stamp()}.json`, JSON.stringify(state, null, 2), 'application/json'));
+  $('csvBtn').addEventListener('click', () => {
+    const esc = v => { v = String(v); if (/^[=+\-@]/.test(v)) v = "'" + v; return '"' + v.replace(/"/g, '""') + '"'; };
+    const rows = [['time','name','contact','tickets','paid','status']];
+    state.purchases.forEach(p => rows.push([new Date(p.ts).toISOString(), p.name, p.contact, p.qty, p.qty * PRICE,
+      p.clearedByPrize === null ? 'in pool' : 'won ' + state.prizes[p.clearedByPrize].name]));
+    download(`raffle-sales-${stamp()}.csv`, rows.map(r => r.map(esc).join(',')).join('\n'), 'text/csv');
+  });
+  $('importBtn').addEventListener('click', () => $('importFile').click());
+  $('importFile').addEventListener('change', async e => {
+    const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+    try {
+      const s = JSON.parse(await f.text());
+      if (!Array.isArray(s.prizes) || !Array.isArray(s.purchases)) throw new Error();
+      if (!confirm('Replace all current data with this backup?')) return;
+      state = s; if (!state.nextId) state.nextId = Math.max(0, ...state.purchases.map(p => p.id)) + 1;
+      save(); render();
+    } catch { alert('Invalid backup file.'); }
+  });
+  $('resetBtn').addEventListener('click', () => {
+    if (!confirm('Delete ALL sales and winners? This cannot be undone.')) return;
+    if (prompt('Type RESET to confirm') !== 'RESET') return;
+    state = defaultState(); save(); $('stage').classList.remove('winner');
+    $('stage').querySelector('.name').textContent = '—'; $('stage').querySelector('.sub').textContent = 'Ready to draw';
+    render();
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>
